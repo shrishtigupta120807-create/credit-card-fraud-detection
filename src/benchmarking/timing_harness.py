@@ -45,7 +45,7 @@ def benchmark_latency(model, X, n_samples=200):
     for i in range(n_samples):
         row = X.iloc[[i]]
         start = time.perf_counter()
-        model.predict(row)
+        model.predict_proba(row)
         end = time.perf_counter()
         latencies.append(end - start)
 
@@ -62,3 +62,6 @@ def benchmark_latency(model, X, n_samples=200):
 
 results = benchmark_latency(dummy, X_train)
 print(results)
+
+
+
