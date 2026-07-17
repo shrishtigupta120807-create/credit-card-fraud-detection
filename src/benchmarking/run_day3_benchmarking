@@ -1,0 +1,87 @@
+import pickle
+import pandas as pd
+from timing_harness import benchmark_latency
+
+import joblib
+import pandas as pd
+from timing_harness import benchmark_latency
+
+# Load validation data
+val = pd.read_csv("data/splits/val.csv.gz")
+X_val = val.drop(columns=["Class"])
+
+# Tier 1
+tier1_model = joblib.load("models/tier1_model.joblib")
+tier1_results = benchmark_latency(tier1_model, X_val)
+
+# Tier 2
+tier2_model = joblib.load("models/tier2_model.pkl")
+tier2_results = benchmark_latency(tier2_model, X_val)
+
+print("Tier 1:", tier1_results)
+print("Tier 2:", tier2_results)
+
+# Load Tier 2 model — note: .pkl files load differently than .joblib
+import joblib
+tier2_model = joblib.load("models/tier2_model.pkl")
+
+# Same validation data as before
+val = pd.read_csv("data/splits/val.csv.gz")
+X_val = val.drop(columns=["Class"])
+
+# Benchmark it
+tier2_results = benchmark_latency(tier2_model, X_val)
+print(tier2_results)
+
+
+
+comparison_table = pd.DataFrame([
+    {
+        "system": "Tier 1 alone",
+        "mean_latency_sec": 0.000196,   # or however you're storing your Tier 1 results dict
+        "median_latency_sec": 0.000192,
+        "max_latency_sec": 0.000477,
+    },
+    {
+        "system": "Tier 2 alone",
+        "mean_latency_sec": tier2_results["mean"],
+        "median_latency_sec": tier2_results["median"],
+        "max_latency_sec": tier2_results["max"],
+    },
+])
+
+print(comparison_table)
+
+
+# Placeholder: pretend this is what B's real cascade function will look like.
+# It should take a threshold and return (accuracy, latency) for that threshold.
+def fake_cascade_predict(threshold, X_val, y_val):
+    """
+    Fake stand-in for B's real cascade function.
+    Simulates: higher threshold = fewer escalations = faster but less accurate.
+    """
+    # Fake logic just for testing the sweep structure — NOT real numbers
+    fake_latency = tier1_results["mean"] + (1 - threshold) * (tier2_results["mean"] - tier1_results["mean"])
+    fake_accuracy = 0.70 + (1 - threshold) * 0.25  # made-up trend, just to test plotting
+    return fake_accuracy, fake_latency
+
+
+# Sweep across a range of thresholds
+thresholds = [0.9, 0.7, 0.5, 0.3, 0.1]
+sweep_latencies = []
+sweep_accuracies = []
+
+for t in thresholds:
+    acc, lat = fake_cascade_predict(t, X_val, val["Class"])
+    sweep_accuracies.append(acc)
+    sweep_latencies.append(lat)
+
+print("Thresholds:", thresholds)
+print("Latencies:", sweep_latencies)
+print("Accuracies:", sweep_accuracies)
+
+
+
+from plotting import plot_pareto
+
+plot_pareto(sweep_latencies, sweep_accuracies, labels=[f"t={t}" for t in thresholds])
