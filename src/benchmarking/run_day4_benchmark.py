@@ -23,6 +23,24 @@ val = pd.read_csv(os.path.join(repo_root, "data", "splits", "val.csv.gz"))
 X_val = val.drop(columns=["Class"])
 y_val = val["Class"]
 
+
+from timing_harness import benchmark_latency
+
+# Compute Tier 1 alone — latency AND accuracy, freshly measured
+tier1_scores = tier1_model.predict_proba(X_val)[:, 1]
+tier1_latency = benchmark_latency(tier1_model, X_val)
+tier1_aucpr = average_precision_score(y_val, tier1_scores)
+
+# Compute Tier 2 alone — same idea
+tier2_scores = tier2_model.predict_proba(X_val)[:, 1]
+tier2_latency = benchmark_latency(tier2_model, X_val)
+tier2_aucpr = average_precision_score(y_val, tier2_scores)
+
+print("Tier 1 alone:", tier1_latency["mean"], tier1_aucpr)
+print("Tier 2 alone:", tier2_latency["mean"], tier2_aucpr)
+
+
+
 # --- Quick sanity check on one transaction ---
 one_transaction = X_val.iloc[0]
 cascade = FraudCascade(tier1_model, tier2_model, low_threshold=0.3, high_threshold=0.7)
@@ -70,24 +88,8 @@ for low, high in threshold_bands:
     })
 
     comparison_table = pd.DataFrame([
-    {"system": "Tier 1 alone", "mean_latency_sec": 0.000196, "aucpr": None},  # from Day 2
-    {"system": "Tier 2 alone", "mean_latency_sec": 0.001278, "aucpr": None},  # from Day 3
-] + [
-    {"system": f"Cascade ({low}-{high})", "mean_latency_sec": r["mean_latency"], "aucpr": r["aucpr"]}
-    for (low, high), r in zip(threshold_bands, sweep_results)
-])
-
-print(comparison_table)
-
-# Save it so it doesn't disappear when the script ends
-comparison_table.to_csv(os.path.join(repo_root, "results", "comparison_table.csv"), index=False)
-
-
-
-
-comparison_table = pd.DataFrame([
-    {"system": "Tier 1 alone", "mean_latency_sec": 0.000196, "aucpr": None},  # from Day 2
-    {"system": "Tier 2 alone", "mean_latency_sec": 0.001278, "aucpr": None},  # from Day 3
+    {"system": "Tier 1 alone", "mean_latency_sec": tier1_latency["mean"], "aucpr": tier1_aucpr},
+    {"system": "Tier 2 alone", "mean_latency_sec": tier2_latency["mean"], "aucpr": tier2_aucpr},
 ] + [
     {"system": f"Cascade ({low}-{high})", "mean_latency_sec": r["mean_latency"], "aucpr": r["aucpr"]}
     for (low, high), r in zip(threshold_bands, sweep_results)
@@ -110,9 +112,11 @@ pareto_aucprs = [None, None] + [r["aucpr"] for r in sweep_results]  # Tier1/Tier
 pareto_labels = ["Tier 1 alone", "Tier 2 alone"] + [f"{low}-{high}" for low, high in threshold_bands]
 
 # Only plot points that actually have both latency and AUCPR values
-plot_latencies = [r["mean_latency"] for r in sweep_results]
-plot_aucprs = [r["aucpr"] for r in sweep_results]
-plot_labels = [f"{low}-{high}" for low, high in threshold_bands]
+plot_latencies = [tier1_latency["mean"], tier2_latency["mean"]] + [r["mean_latency"] for r in sweep_results]
+plot_aucprs = [tier1_aucpr, tier2_aucpr] + [r["aucpr"] for r in sweep_results]
+plot_labels = ["Tier1 alone", "Tier2 alone"] + [f"{low}-{high}" for low, high in threshold_bands]
+
+
 
 plot_pareto(plot_latencies, plot_aucprs, labels=plot_labels)
 
