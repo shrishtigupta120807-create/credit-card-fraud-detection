@@ -117,8 +117,12 @@ plot_aucprs = [tier1_aucpr, tier2_aucpr] + [r["aucpr"] for r in sweep_results]
 plot_labels = ["Tier1 alone", "Tier2 alone"] + [f"{low}-{high}" for low, high in threshold_bands]
 
 
-
-plot_pareto(plot_latencies, plot_aucprs, labels=plot_labels)
+plot_pareto(
+    plot_latencies,
+    plot_aucprs,
+    labels=plot_labels,
+    save_path=os.path.join(repo_root, "results", "pareto_plot.png")
+)
 
 
 
